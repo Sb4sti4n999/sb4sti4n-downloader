@@ -1,0 +1,188 @@
+#!/bin/bash
+
+# Auto-instalador y script combinado
+if [ ! -f "/usr/local/bin/sb4sti4n" ]; then
+    echo -e "\033[1;33mInstalando sb4sti4n...\033[0m"
+    sudo curl -L https://raw.githubusercontent.com/sb4sti4n/sb4sti4n/main/sb4sti4n -o /usr/local/bin/sb4sti4n
+    sudo chmod +x /usr/local/bin/sb4sti4n
+    echo -e "\033[1;32mInstalación completada! Ejecuta 'sb4sti4n <URL>' para usar\033[0m"
+    exit 0
+fi
+
+# ------------------ SCRIPT PRINCIPAL ------------------
+CREATOR="sb4sti4n"
+VERSION="6.0"
+FOLDER_NAME="sb4sti4n√Downloads"
+
+# Configuración de colores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+PURPLE='\033[0;35m'
+BLUE='\033[0;34m'
+WHITE='\033[1;37m'
+NC='\033[0m'
+
+# Animaciones
+SPINNER=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
+DOTS=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+
+USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
+# Detectar sistema y configurar rutas
+setup_environment() {
+    if [[ -d "/system" && -d "/sdcard" ]]; then
+        DEFAULT_DIR="/sdcard/0/${FOLDER_NAME}"
+        ANDROID=true
+    else
+        DEFAULT_DIR="${HOME}/${FOLDER_NAME}"
+        ANDROID=false
+    fi
+
+    VIDEO_DIR="${DEFAULT_DIR}/Videos"
+    FILE_DIR="${DEFAULT_DIR}/Files"
+    mkdir -p "$VIDEO_DIR" "$FILE_DIR"
+}
+
+spinner() {
+    local pid=$!
+    local delay=0.1
+    local i=0
+    while kill -0 $pid 2>/dev/null; do
+        printf "\r${SPINNER[$i]} ${YELLOW}Procesando...${NC}  "
+        i=$(( (i+1) % 8 ))
+        sleep $delay
+    done
+    printf "\r\033[K"
+}
+
+dot_animation() {
+    local text=$1
+    local pid=$!
+    local delay=0.2
+    local i=0
+    while kill -0 $pid 2>/dev/null; do
+        printf "\r${DOTS[$i]} ${CYAN}%s${NC}" "$text"
+        i=$(( (i+1) % 10 ))
+        sleep $delay
+    done
+    printf "\r\033[K"
+}
+
+check_dependencies() {
+    declare -A tools=(
+        ["curl"]="sudo apt install curl -y"
+        ["wget"]="sudo apt install wget -y"
+        ["ffmpeg"]="sudo apt install ffmpeg -y"
+        ["yt-dlp"]="sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && sudo chmod a+rx /usr/local/bin/yt-dlp"
+    )
+
+    for tool in "${!tools[@]}"; do
+        if ! command -v $tool &> /dev/null; then
+            echo -e "${YELLOW}Instalando $tool...${NC}"
+            eval "${tools[$tool]}" > /dev/null 2>&1
+            [ $? -ne 0 ] && echo -e "${RED}Error instalando $tool${NC}" && exit 1
+        fi
+    done
+}
+
+show_banner() {
+    clear
+    echo -e "${PURPLE}"
+    echo -e " ██████╗ ██████╗ ██████╗ ███████╗████████╗██╗ █████╗ ███╗  ██╗"
+    echo -e "██╔════╝██╔═══██╗██╔══██╗██╔════╝╚══██╔══╝██║██╔══██╗████╗ ██║"
+    echo -e "██║     ██║   ██║██████╔╝█████╗     ██║   ██║███████║██╔██╗██║"
+    echo -e "██║     ██║   ██║██╔══██╗██╔══╝     ██║   ██║██╔══██║██║╚████║"
+    echo -e "╚██████╗╚██████╔╝██║  ██║███████╗   ██║   ██║██║  ██║██║ ╚███║"
+    echo -e " ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═╝╚═╝  ╚══╝"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${WHITE}           Download Manager v${VERSION} by ${CREATOR}${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}\n"
+}
+
+download_gdrive() {
+    local url="$1"
+    local file_id
+    
+    [[ "$url" =~ /file/d/([a-zA-Z0-9_-]+) ]] && file_id=${BASH_REMATCH[1]}
+    [[ "$url" =~ id=([a-zA-Z0-9_-]+) ]] && file_id=${BASH_REMATCH[1]}
+    [ -z "$file_id" ] && return 1
+
+    echo -e "${CYAN}📥 Detectado Google Drive: ${WHITE}$file_id${NC}"
+    local download_url="https://drive.google.com/uc?id=${file_id}&export=download"
+    local file_name=$(curl -s -L "$url" | grep -o '<title>.*</title>' | sed 's/<title>//;s/<\/title>//;s/ - Google Drive$//')
+
+    if command -v wget &> /dev/null; then
+        (wget --progress=bar --no-check-certificate -U "$USER_AGENT" -O "$FILE_DIR/$file_name" "$download_url") & spinner
+    else
+        (curl -# -L -A "$USER_AGENT" -o "$FILE_DIR/$file_name" "$download_url") & spinner
+    fi
+
+    [ $? -eq 0 ] && echo -e "${GREEN}✅ Google Drive descargado: ${WHITE}$FILE_DIR/$file_name${NC}" || return 1
+}
+
+download_video() {
+    local url="$1"
+    local downloader="yt-dlp"
+    command -v $downloader &> /dev/null || downloader="youtube-dl"
+    
+    echo -e "${CYAN}🎥 Detectado video: ${WHITE}$url${NC}"
+    ($downloader -o "$VIDEO_DIR/%(title)s.%(ext)s" "$url") & spinner
+    [ $? -eq 0 ] && echo -e "${GREEN}✅ Video descargado: ${WHITE}$VIDEO_DIR${NC}" || return 1
+}
+
+download_generic() {
+    local url="$1"
+    local file_name=$(basename "$url" | sed 's/?.*//')
+    
+    echo -e "${CYAN}🌐 Descargando recurso: ${WHITE}$url${NC}"
+    if command -v wget &> /dev/null; then
+        (wget --progress=bar --no-check-certificate -U "$USER_AGENT" -P "$FILE_DIR" "$url") & spinner
+    else
+        (curl -# -L -A "$USER_AGENT" -o "$FILE_DIR/$file_name" "$url") & spinner
+    fi
+
+    [ $? -eq 0 ] && echo -e "${GREEN}✅ Descarga completada: ${WHITE}$FILE_DIR/$file_name${NC}" || return 1
+}
+
+check_internet() {
+    (ping -c 1 -W 2 8.8.8.8 >/dev/null) & dot_animation "Verificando conexión"
+    [ $? -ne 0 ] && echo -e "${RED}❌ Sin conexión a internet${NC}" && exit 1
+    echo -e "${GREEN}✓${NC} ${WHITE}Conexión establecida${NC}"
+}
+
+show_help() {
+    echo -e "${CYAN}Uso:${NC}"
+    echo -e "  ${WHITE}sb4sti4n ${YELLOW}<URL>${NC}"
+    echo -e "${CYAN}Ejemplos:${NC}"
+    echo -e "  ${WHITE}sb4sti4n ${YELLOW}https://youtu.be/ID"
+    echo -e "  ${WHITE}sb4sti4n ${YELLOW}https://drive.google.com/archivo"
+    echo -e "  ${WHITE}sb4sti4n ${YELLOW}https://ejemplo.com/archivo.zip"
+}
+
+# Main
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    show_help
+    exit 0
+fi
+
+[ -z "$1" ] && echo -e "${RED}❌ Proporciona un URL${NC}" && show_help && exit 1
+
+setup_environment
+check_internet
+check_dependencies
+show_banner
+
+if [[ "$1" == *"drive.google.com"* ]]; then
+    download_gdrive "$1" || download_generic "$1"
+elif [[ "$1" == *"youtu.be"* || "$1" == *"youtube.com"* ]]; then
+    download_video "$1" || download_generic "$1"
+else
+    download_generic "$1"
+fi
+
+echo -e "\n${BLUE}════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}            Descarga finalizada! ${WHITE}🎉${NC}"
+echo -e "${BLUE}➤ Directorio: ${WHITE}${DEFAULT_DIR}${NC}"
+echo -e "${BLUE}════════════════════════════════════════════════${NC}\n"
