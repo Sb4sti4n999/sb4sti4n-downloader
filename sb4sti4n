@@ -1,148 +1,165 @@
 #!/bin/bash
 
-# =================================================================
-# sb4sti4n Download Manager - Versión 9.0 (2023-10-20)
-# =================================================================
-# Script multiplataforma para descargas avanzadas desde terminal
-# Características principales:
-# 1. Soporte para YouTube/Google Drive/SourceForge
-# 2. Descargas aceleradas con aria2c (16 conexiones)
-# 3. Auto-instalación de dependencias
-# 4. Sistema de logging y métricas
-# 5. Interfaz con animaciones y colores
-# 6. Compatibilidad con Android Termux
-# =================================================================
-
-# ███████╗██████╗ ██████╗ ███████╗████████╗██╗ █████╗ ███╗  ██╗
-# ██╔════╝██╔══██╗██╔══██╗██╔════╝╚══██╔══╝██║██╔══██╗████╗ ██║
-# ███████╗██████╔╝██████╔╝█████╗     ██║   ██║███████║██╔██╗██║
-# ╚════██║██╔═══╝ ██╔══██╗██╔══╝     ██║   ██║██╔══██║██║╚████║
-# ███████║██║     ██║  ██║███████╗   ██║   ██║██║  ██║██║ ╚███║
-# ╚══════╝╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═╝╚═╝  ╚══╝
-
-# Configuración Global (Personalizable)
 # ======================================================
-readonly REPO_OWNER="sb4sti4n999"
-readonly REPO_NAME="sb4sti4n"
-readonly VERSION="9.0"
-readonly USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
-readonly MAX_CONNECTIONS=16
-readonly LOG_FILE="${HOME}/sb4sti4n_downloads/sb4sti4n.log"
+# sb4sti4n Download Manager - Versión 10.0 (2023)
+# Características principales:
+# 1. Soporte multiplataforma (Linux/Android)
+# 2. Descargas ultra-rápidas (16 conexiones paralelas)
+# 3. Auto-instalación de dependencias
+# 4. Sistema de métricas y logging
+# 5. Detección automática de plataformas
+# 6. Interfaz con animaciones y colores
+# Repositorio: github.com/sb4sti4n999/sb4sti4n
+# ======================================================
+
+# Configuración Global
+# ======================================================
+declare -g VERSION="10.0"
+declare -g REPO_OWNER="sb4sti4n999"
+declare -g REPO_NAME="sb4sti4n"
+declare -g USER_AGENT="sb4sti4n-Downloader/10.0"
+declare -g MAX_CONNECTIONS=16
+declare -g -A PLATFORM_ICONS=(
+    ["youtube"]="🎥" 
+    ["drive"]="☁️" 
+    ["sourceforge"]="🚀"
+    ["github"]="🐱"
+    ["default"]="🌐"
+)
+
+# Configuración de Directorios
+# ======================================================
+declare -g DOWNLOAD_DIR="${HOME}/sb4sti4n_downloads"
+declare -g LOG_DIR="${DOWNLOAD_DIR}/logs"
+declare -g METRICS_FILE="${LOG_DIR}/download_metrics.csv"
 
 # Paleta de Colores ANSI
 # ======================================================
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; PURPLE='\033[0;35m'; BLUE='\033[0;34m'
-WHITE='\033[1;37m'; NC='\033[0m'
+declare -g RED='\033[0;31m'       GREEN='\033[0;32m'
+declare -g YELLOW='\033[1;33m'    CYAN='\033[0;36m'
+declare -g PURPLE='\033[0;35m'    BLUE='\033[0;34m'
+declare -g WHITE='\033[1;37m'     NC='\033[0m'
 
 # Animaciones
 # ======================================================
-declare -a SPINNER=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
-declare -a DOTS=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+declare -ag SPINNER=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
+declare -ag DOTS=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
 
-# Auto-Instalador Global
+# Auto-Instalación Global
 # ======================================================
 auto_install() {
     if [[ ! -f "/usr/local/bin/sb4sti4n" ]]; then
         echo -e "${YELLOW}⚙️ Instalando sb4sti4n...${NC}"
-        sudo curl -L "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/sb4sti4n" \
-             -o "/usr/local/bin/sb4sti4n" && \
-        sudo chmod +x "/usr/local/bin/sb4sti4n"
-        
-        echo -e "${GREEN}✅ Instalación completada! Ejecuta 'sb4sti4n --help' para comenzar${NC}"
+        if ! sudo curl -L "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/sb4sti4n" \
+             -o "/usr/local/bin/sb4sti4n" 2>/dev/null || 
+           ! sudo chmod +x "/usr/local/bin/sb4sti4n"; then
+            echo -e "${RED}❌ Error en la instalación${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✅ Instalación completada! Ejecute 'sb4sti4n --help'${NC}"
         exit 0
     fi
 }
 
-# Funciones Principales
+# Gestión de Dependencias
 # ======================================================
-
-# Verificar e instalar dependencias
 check_dependencies() {
     local -A DEPENDENCIES=(
-        ["curl"]="sudo apt install curl -y"
-        ["wget"]="sudo apt install wget -y"
         ["aria2c"]="sudo apt install aria2 -y"
+        ["yt-dlp"]="sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp"
         ["ffmpeg"]="sudo apt install ffmpeg -y"
-        ["yt-dlp"]="sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && sudo chmod a+rx /usr/local/bin/yt-dlp"
     )
-
+    
     for cmd in "${!DEPENDENCIES[@]}"; do
-        if ! command -v "${cmd}" &> /dev/null; then
+        if ! command -v "$cmd" &> /dev/null; then
             echo -e "${YELLOW}⚙️ Instalando ${cmd}...${NC}"
-            eval "${DEPENDENCIES[$cmd]}" > /dev/null 2>&1 || {
+            if ! eval "${DEPENDENCIES[$cmd]}" >/dev/null 2>&1; then
                 echo -e "${RED}❌ Error instalando ${cmd}${NC}"
                 exit 1
-            }
+            fi
         fi
     done
 }
 
-# Configurar entorno
+# Configuración Inicial
+# ======================================================
 setup_environment() {
-    local download_dir="${HOME}/sb4sti4n_downloads"
-    mkdir -p "${download_dir}/videos" \
-             "${download_dir}/files" \
-             "${download_dir}/logs"
+    mkdir -p "${DOWNLOAD_DIR}/"{videos,files,logs}
+    [[ ! -f "$METRICS_FILE" ]] && 
+    echo "timestamp,status,platform,url,size" > "$METRICS_FILE"
     
-    # Configurar logs
-    exec > >(tee -a "${LOG_FILE}") 2>&1
+    exec > >(tee -a "${LOG_DIR}/session.log") 2>&1
 }
 
-# Descargas Aceleradas (SourceForge)
-download_sourceforge() {
+# Detección de Plataforma
+# ======================================================
+detect_platform() {
     local url="$1"
-    local project_path=$(sed -n 's|https://sourceforge.net/projects/\([^/]*\)/files/\(.*\)/download|\1/\2|p' <<< "$url")
-    local direct_url="https://downloads.sourceforge.net/project/${project_path}"
-    local filename=$(basename "${direct_url}")
-
-    aria2c --file-allocation=none \
-           --split="${MAX_CONNECTIONS}" \
-           --max-connection-per-server="${MAX_CONNECTIONS}" \
-           --dir="${HOME}/sb4sti4n_downloads/files" \
-           --out="${filename}" \
-           --summary-interval=0 \
-           --check-certificate=false \
-           "${direct_url}" || return 1
+    case "$url" in
+        *youtube.com*|*youtu.be*)   echo "youtube" ;;
+        *drive.google.com*)         echo "drive" ;;
+        *sourceforge.net*)          echo "sourceforge" ;;
+        *github.com*)               echo "github" ;;
+        *)                          echo "default" ;;
+    esac
 }
 
-# Descargas Google Drive
+# Descarga de YouTube
+# ======================================================
+download_youtube() {
+    local url="$1"
+    yt-dlp -o "${DOWNLOAD_DIR}/videos/%(title)s.%(ext)s" \
+        --merge-output-format mp4 \
+        --no-playlist \
+        --throttled-rate 100K \
+        "$url" || return 1
+}
+
+# Descarga de Google Drive
+# ======================================================
 download_gdrive() {
     local url="$1"
     local file_id=$(grep -oP '/d/\K[^/]+' <<< "$url")
     local api_url="https://drive.google.com/uc?id=${file_id}&export=download"
     
-    aria2c --split=4 \
+    aria2c --dir="${DOWNLOAD_DIR}/files" \
+           --out="$(get_gdrive_name "$file_id")" \
+           --split=8 \
            --check-certificate=false \
-           --dir="${HOME}/sb4sti4n_downloads/files" \
-           "${api_url}" || return 1
+           "$api_url" || return 1
 }
 
-# Descargas YouTube
-download_youtube() {
-    yt-dlp -o "${HOME}/sb4sti4n_downloads/videos/%(title)s.%(ext)s" \
-           --merge-output-format mp4 \
-           --no-playlist \
-           "$1" || return 1
-}
-
-# Sistema de Logs y Métricas
-log_metrics() {
-    local success=$1
-    local platform=$2
-    local log_data=$(date "+%Y-%m-%d %H:%M:%S"),${success},${platform},${ORIGIN_URL}
+# Descarga Turbo de SourceForge
+# ======================================================
+download_sourceforge() {
+    local url="$1"
+    local project_path=$(sed -n 's|.*sourceforge.net/projects/\([^/]*\)/files/\(.*\)/download|\1/\2|p' <<< "$url")
+    local direct_url="https://downloads.sourceforge.net/project/${project_path}"
     
-    echo "${log_data}" >> "${HOME}/sb4sti4n_downloads/logs/metrics.csv"
+    aria2c --dir="${DOWNLOAD_DIR}/files" \
+           --split="$MAX_CONNECTIONS" \
+           --max-connection-per-server="$MAX_CONNECTIONS" \
+           --summary-interval=0 \
+           --check-certificate=false \
+           "$direct_url" || return 1
+}
+
+# Sistema de Métricas
+# ======================================================
+log_metrics() {
+    local status="$1" platform="$2" url="$3" size="$4"
+    echo "$(date +%FT%T),${status},${platform},${url},${size}" >> "$METRICS_FILE"
 }
 
 # Interfaz de Usuario
+# ======================================================
 show_banner() {
     clear
     echo -e "${PURPLE}"
     echo -e " ██████╗ ██████╗ ██████╗ ███████╗████████╗██╗ █████╗ ███╗  ██╗"
     echo -e "██╔════╝██╔═══██╗██╔══██╗██╔════╝╚══██╔══╝██║██╔══██╗████╗ ██║"
     echo -e "██║     ██║   ██║██████╔╝█████╗     ██║   ██║███████║██╔██╗██║"
-    echo -e "██║     ██║   ██║██╔══██╗██╔���═╝     ██║   ██║██╔══██║██║╚████║"
+    echo -e "██║     ██║   ██║██╔══██╗██╔══╝     ██║   ██║██╔══██║██║╚████║"
     echo -e "╚██████╗╚██████╔╝██║  ██║███████╗   ██║   ██║██║  ██║██║ ╚███║"
     echo -e " ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═╝╚═╝  ╚══╝"
     echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
@@ -151,54 +168,45 @@ show_banner() {
 }
 
 # Función Principal
+# ======================================================
 main() {
     auto_install
     setup_environment
     check_dependencies
+    show_banner
+
+    [[ -z "$1" ]] && {
+        echo -e "${RED}❌ Error: Proporcione un URL válido${NC}"
+        exit 1
+    }
+
+    local url="$1"
+    local platform=$(detect_platform "$url")
+    local icon=${PLATFORM_ICONS[$platform]:-${PLATFORM_ICONS[default]}}
     
-    case "$1" in
-        "-h"|"--help")
-            echo -e "${CYAN}Uso: sb4sti4n [URL]"
-            echo -e "Ejemplos:"
-            echo -e "  sb4sti4n https://youtu.be/ID"
-            echo -e "  sb4sti4n https://drive.google.com/file/d/ID"
-            echo -e "  sb4sti4n https://sourceforge.net/projects/.../download"
-            exit 0
-            ;;
-        "-v"|"--version")
-            echo -e "sb4sti4n v${VERSION} - ${REPO_OWNER}/${REPO_NAME}"
-            exit 0
-            ;;
-        *)
-            [[ -z "$1" ]] && {
-                echo -e "${RED}❌ Error: Proporciona un URL válido${NC}"
-                exit 1
-            }
+    echo -e "${CYAN}🔍 Analizando enlace: ${WHITE}${url}${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN} Plataforma: ${icon} ${platform}"
+    echo -e "${CYAN} Método: ${WHITE}$([[ "$platform" == "sourceforge" ]] && echo "Turbo Mode" || echo "Standard")${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════${NC}"
+
+    case "$platform" in
+        "youtube")      download_youtube "$url" ;;
+        "drive")        download_gdrive "$url" ;;
+        "sourceforge")  download_sourceforge "$url" ;;
+        *)              download_generic "$url" ;;
     esac
 
-    show_banner
-    local url="$1"
-    
-    # Detectar tipo de contenido
-    if [[ "$url" == *"youtube.com"* || "$url" == *"youtu.be"* ]]; then
-        download_youtube "$url"
-    elif [[ "$url" == *"drive.google.com"* ]]; then
-        download_gdrive "$url"
-    elif [[ "$url" == *"sourceforge.net"* ]]; then
-        download_sourceforge "$url"
-    else
-        download_generic "$url"
-    fi
-
-    [[ $? -eq 0 ]] && {
+    if [[ $? -eq 0 ]]; then
         echo -e "\n${GREEN}✅ Descarga completada exitosamente!${NC}"
-        log_metrics "true" "$(parse_domain "$url")"
-    } || {
+        log_metrics "success" "$platform" "$url" "$(get_file_size)"
+    else
         echo -e "\n${RED}❌ Error en la descarga${NC}"
-        log_metrics "false" "$(parse_domain "$url")"
-    }
+        log_metrics "failed" "$platform" "$url" "0"
+        exit 1
+    fi
 }
 
 # Punto de Entrada
 # ======================================================
-main "$@"
+[[ "$0" == "$BASH_SOURCE" ]] && main "$@"
