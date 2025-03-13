@@ -1,0 +1,17 @@
+   - Crear GitHub Pages con documentación técnica
+   - Usar keywords en issues y discusiones
+
+3. **Social Preview**:
+   - Crear imagen 1280x640px con:
+     - Logo del proyecto
+     - Texto: "Descarga cualquier archivo desde terminal"
+     - Enlace: github.com/sb4sti4n999/sb4sti4n
+
+### Para usuarios finales:
+```bash
+# Instalación permanente
+sudo curl -L https://raw.githubusercontent.com/sb4sti4n999/sb4sti4n/main/sb4sti4n -o /usr/local/bin/sb4sti4n
+sudo chmod +x /usr/local/bin/sb4sti4n
+
+# Ejemplo de uso
+sb4sti4n https://youtu.be/ejemplo
