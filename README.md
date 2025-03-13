@@ -21,7 +21,7 @@ Gestor de descargas universal desde terminal con soporte para **YouTube, Google 
 ## 🚀 Instalación
 ```bash
 # Método directo (sin instalación):
-curl -sL https://raw.githubusercontent.com/sb4sti4n999/sb4sti4n/main/sb4sti4n | bash -s -- [URL]
+curl -sL https://raw.githubusercontent.com/sb4sti4n999/sb4sti4n/main/sb4sti4n | bash -s -- [https://github.com/sb4sti4n999/sb4sti4n]
 
 # Instalación permanente:
 sudo curl -L https://raw.githubusercontent.com/sb4sti4n999/sb4sti4n/main/sb4sti4n -o /usr/local/bin/sb4sti4n
